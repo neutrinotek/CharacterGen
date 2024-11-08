@@ -60,5 +60,6 @@ Images are automatically saved in a directory with the character name within the
   - I'm considering working in a way to adjust the Character descriptions directly in the UI, but we'll see.
   - Fix the Reuse Seed checkbox
   - Set up e-mail password reset functionality
+  - Do a sweep of security features to ensure no vulnerabilities.
   - Make the Advanced Options more robust to handle different types of workflows
-  - Add more functionality in the Browse page for easier file management. 
+  - Add more functionality in the Browse page for easier file management.
