@@ -18,7 +18,7 @@ It's still very much a work in progress, but I felt like it was in a good enough
 
 - When a character is selected from the dropdown menu, and image generation is triggered, Ollama will use the information in characters.yaml to create a random or enhanced prompt for that character.
 - Enhanced prompts are done through adding input in the prompt section, and clicking "Enhanced Generation."
-- Clicking Manual Generation with only send the text in the prompt box to ComfyUI without engaging with Ollama (keep in mind, if a character is selected, their Lora will still be active.)
+- Clicking Manual Generation will only send the text in the prompt box to ComfyUI without engaging with Ollama (keep in mind, if a character is selected, their Lora will still be active.)
 - If you like the prompt, clicking Regenerate Image will bypass Ollama and send the exact same prompt back to ComfyUI. 
 ![image](https://github.com/user-attachments/assets/36296782-56a9-46b4-8827-b8202465a314)
 
