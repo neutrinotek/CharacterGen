@@ -56,7 +56,8 @@ Images are automatically saved in a directory with the character name within the
   - Currently, password reset is done by providing the user with a reset link that can only be used once an admin approves the reset. This isn't ideal and still a WIP, but some of the framework for implementing e-mail reset should be in the code. 
  
 ## **Things To Do/Current Issues**
-  - I am still tinkering with the Ollama system prompt. It does pretty good, but anything put in the "personality" section of the character file gets weighted too heavily for my liking. This could be great if you want someone to always wear a certain style, or be in a certain location, but personally I would like to give it a bit more room for creativity. 
+  - I am still tinkering with the Ollama system prompt. It does pretty good, but anything put in the "personality" section of the character file gets weighted too heavily for my liking. This could be great if you want someone to always wear a certain style, or be in a certain location, but personally I would like to give it a bit more room for creativity.
+  - Add ability to adjust Ollama settings (i.e. model) in the UI.
   - I'm considering working in a way to adjust the Character descriptions directly in the UI, but we'll see.
   - Fix the Reuse Seed checkbox
   - Set up e-mail password reset functionality
