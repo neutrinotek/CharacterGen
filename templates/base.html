@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Character Image Generator</title>
+    <style>
+        /* Original Styles */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #121212;
+            color: white;
+            padding-top: 140px;
+        }
+
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: #1a1a1a;
+            z-index: 1000;
+            border-bottom: 1px solid #333;
+        }
+
+        .logo-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            position: relative;
+        }
+
+        .title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            margin: 0;
+            font-size: 48px;
+            white-space: nowrap;
+        }
+
+        .logo {
+            height: 40px;
+        }
+
+        .logo-left {
+            margin-right: auto;
+        }
+
+        .logo-right {
+            margin-left: auto;
+        }
+
+        .tab-container {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            background-color: #1a1a1a;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 20px;
+            padding: 10px 20px;
+        }
+
+        .tab {
+            color: #888;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        .tab:hover {
+            background-color: #333;
+        }
+
+        .tab.active {
+            color: white;
+            background-color: #404040;
+        }
+
+        .tab-spacer {
+            flex: 1;
+            display: flex;
+            justify-content: flex-end;
+            padding-right: 20px;
+        }
+
+        .logout-link {
+            color: #888;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        .logout-link:hover {
+            background-color: #333;
+            color: white;
+        }
+
+        /* New Dropdown Styles */
+        .user-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-trigger {
+            color: white;
+            padding: 5px 10px;
+            cursor: pointer;
+            background-color: #1a1a1a;
+            border-radius: 4px;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: #1a1a1a;
+            min-width: 160px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            z-index: 1000;
+            border-radius: 4px;
+        }
+
+        .dropdown-content .dropdown-item {
+            color: white;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            transition: background-color 0.3s;
+        }
+
+        .dropdown-content .dropdown-item:hover {
+            background-color: #333;
+        }
+
+        .user-dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1001;
+        }
+
+        .modal-content {
+            position: relative;
+            background-color: #1a1a1a;
+            margin: 15% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+            color: white;
+        }
+
+        .modal-title {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background-color: #333;
+            color: white;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .cancel-button, .submit-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .cancel-button {
+            background-color: #666;
+            color: white;
+        }
+
+        .submit-button {
+            background-color: #2196F3;
+            color: white;
+        }
+
+        .cancel-button:hover {
+            background-color: #888;
+        }
+
+        .submit-button:hover {
+            background-color: #1976D2;
+        }
+
+        {% block additional_styles %}{% endblock %}
+    </style>
+    <!-- Original Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.26.0/babel.min.js"></script>
+</head>
+<body>
+    <div class="header">
+        <div class="logo-container">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo logo-left">
+            <h1 class="title">Character Image Generator</h1>
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo logo-right">
+        </div>
+        <div class="tab-container">
+            <div class="tabs">
+                <a href="{{ url_for('index') }}" class="tab {% if request.endpoint == 'index' %}active{% endif %}">Home</a>
+                <a href="{{ url_for('browse_images') }}" class="tab {% if request.endpoint == 'browse_images' %}active{% endif %}">Browse</a>
+                {% if session.get('is_admin', False) %}
+                <a href="{{ url_for('admin.dashboard') }}" class="tab {% if request.endpoint and request.endpoint.startswith('admin.') %}active{% endif %}">Admin</a>
+                {% endif %}
+            </div>
+            <div class="tab-spacer">
+                {% if session.get('user_id') %}
+                <div class="user-dropdown">
+                    <div class="dropdown-trigger">
+                        {{ session.get('username', 'User') }} ▼
+                    </div>
+                    <div class="dropdown-content">
+                        <a href="#" class="dropdown-item" onclick="showPasswordModal()">Change Password</a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item">Logout</a>
+                    </div>
+                </div>
+                {% else %}
+                <a href="{{ url_for('auth.login') }}" class="logout-link">Login</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Change Modal -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <h3 class="modal-title">Change Password</h3>
+            <form action="{{ url_for('auth.change_password') }}" method="post">
+                <div class="form-group">
+                    <label for="current_password">Current Password:</label>
+                    <input type="password" id="current_password" name="current_password" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="new_password">New Password:</label>
+                    <input type="password" id="new_password" name="new_password" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirm_password">Confirm New Password:</label>
+                    <input type="password" id="confirm_password" name="confirm_password" required>
+                </div>
+
+                <div class="modal-buttons">
+                    <button type="button" onclick="closePasswordModal()" class="cancel-button">Cancel</button>
+                    <button type="submit" class="submit-button">Change Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function showPasswordModal() {
+            document.getElementById('passwordModal').style.display = 'block';
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            var modal = document.getElementById('passwordModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+
+    {% block content %}{% endblock %}
+</body>
+</html>

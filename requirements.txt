@@ -1,0 +1,21 @@
+Flask==3.0.0
+Flask-Login==0.6.3
+Flask-SQLAlchemy==3.1.1
+Flask-Bcrypt==1.0.1
+Flask-WTF==1.2.1
+email-validator==2.1.0.post1
+Werkzeug==3.0.1
+PyYAML==6.0.1
+SQLAlchemy==2.0.25
+bcrypt==4.1.2
+python-dotenv==1.0.0
+Pillow==10.1.0
+websocket-client==1.7.0
+requests==2.31.0
+WTForms==3.1.1
+gunicorn==21.2.0  # For production deployment
+python-dateutil==2.8.2
+
+# Dependencies that were already in use
+websocket-client>=0.57.0
+Pillow>=9.0.0

@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block additional_styles %}
+<style>
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+    }
+
+    .item {
+        border: 1px solid #404040;
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform 0.2s;
+        background-color: #2d2d2d;
+    }
+
+    .item:hover {
+        transform: scale(1.02);
+        border-color: #606060;
+    }
+
+    .folder {
+        padding: 15px;
+        background-color: #333333;
+        display: flex;
+        align-items: center;
+    }
+
+    .folder-icon {
+        margin-right: 10px;
+        color: #007bff;
+    }
+
+    .image-container {
+        aspect-ratio: 1;
+        position: relative;
+        background-color: #333333;
+    }
+
+    .image-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .item-name {
+        padding: 8px;
+        text-align: center;
+        word-break: break-word;
+        color: #ffffff;
+        background-color: #2d2d2d;
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.9);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal img {
+        max-width: 90%;
+        max-height: 90vh;
+        object-fit: contain;
+    }
+
+    .current-path {
+        background-color: #2d2d2d;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .controls {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn {
+        padding: 8px 16px;
+        border-radius: 4px;
+        border: 1px solid #666;
+        background-color: #404040;
+        color: white;
+        cursor: pointer;
+    }
+
+    .btn:hover {
+        background-color: #505050;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-danger {
+        background-color: #dc2626;
+    }
+
+    .btn-danger:hover {
+        background-color: #b91c1c;
+    }
+
+    .checkbox-wrapper {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 2;
+    }
+
+    .item-checkbox {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+
+    .delete-modal {
+        padding: 20px;
+        background: #2d2d2d;
+        border-radius: 8px;
+        max-width: 400px;
+        color: white;
+    }
+
+    .delete-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div id="currentPath" class="current-path">
+        <span>/</span>
+        <div class="controls">
+            <button onclick="navigateBack()" class="btn" id="backBtn" disabled>Back</button>
+            <button onclick="selectAll()" class="btn">Select All</button>
+            <button onclick="deselectAll()" class="btn">Deselect All</button>
+            <button onclick="confirmDelete()" class="btn btn-danger" id="deleteBtn" disabled>Delete Selected</button>
+        </div>
+    </div>
+
+    <div id="fileGrid" class="grid">
+        <!-- Grid items will be populated by JavaScript -->
+    </div>
+
+    <div id="imageModal" class="modal" onclick="closeModal()">
+        <img id="modalImage" src="" alt="Full size image">
+    </div>
+
+    <div id="deleteModal" class="modal">
+        <div class="delete-modal">
+            <h3 style="margin-top: 0;">Confirm Deletion</h3>
+            <p id="deleteMessage"></p>
+            <div class="delete-modal-footer">
+                <button onclick="closeDeleteModal()" class="btn">Cancel</button>
+                <button onclick="deleteSelected()" class="btn btn-danger">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPath = '/';
+let selectedItems = new Set();
+
+function closeModal() {
+    document.getElementById('imageModal').style.display = 'none';
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').style.display = 'none';
+}
+
+async function fetchFiles(path) {
+    try {
+        const response = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
+        const data = await response.json();
+        renderFiles(data);
+        updatePathDisplay(path);
+    } catch (error) {
+        console.error('Error fetching files:', error);
+    }
+}
+
+function updatePathDisplay(path) {
+    document.querySelector('#currentPath span').textContent = path;
+    document.getElementById('backBtn').disabled = path === '/';
+}
+
+function showImage(url) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalImage');
+    modal.style.display = 'flex';
+    modalImg.src = url;
+}
+
+function navigateToFolder(folderName) {
+    currentPath += folderName + '/';
+    fetchFiles(currentPath);
+    selectedItems.clear();
+}
+
+function navigateBack() {
+    if (currentPath === '/') return;
+    const parts = currentPath.split('/').filter(p => p);
+    parts.pop();
+    currentPath = '/' + parts.join('/') + '/';
+    fetchFiles(currentPath);
+    selectedItems.clear();
+}
+
+function toggleSelection(itemName) {
+    if (selectedItems.has(itemName)) {
+        selectedItems.delete(itemName);
+    } else {
+        selectedItems.add(itemName);
+    }
+    updateUI();
+}
+
+function selectAll() {
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+        selectedItems.add(checkbox.parentElement.parentElement.nextElementSibling.textContent);
+    });
+    updateUI();
+}
+
+function deselectAll() {
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+    selectedItems.clear();
+    updateUI();
+}
+
+function updateUI() {
+    document.getElementById('deleteBtn').disabled = selectedItems.size === 0;
+}
+
+function confirmDelete() {
+    const modal = document.getElementById('deleteModal');
+    const message = document.getElementById('deleteMessage');
+    message.textContent = `Are you sure you want to delete ${selectedItems.size} selected item(s)? This action cannot be undone.`;
+    modal.style.display = 'flex';
+}
+
+async function deleteSelected() {
+    try {
+        const response = await fetch('/api/delete-files', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                path: currentPath,
+                files: Array.from(selectedItems)
+            }),
+        });
+
+        if (response.ok) {
+            selectedItems.clear();
+            fetchFiles(currentPath);
+            closeDeleteModal();
+        } else {
+            console.error('Failed to delete files');
+        }
+    } catch (error) {
+        console.error('Error deleting files:', error);
+    }
+}
+
+function renderFiles(files) {
+    const grid = document.getElementById('fileGrid');
+    grid.innerHTML = '';
+
+    // Add back button if not at root
+    if (currentPath !== '/') {
+        const backButton = document.createElement('div');
+        backButton.className = 'item';
+        backButton.innerHTML = `
+            <div class="folder" onclick="navigateBack()">
+                <span>📁</span>
+                <span style="margin-left: 10px;">..</span>
+            </div>
+        `;
+        grid.appendChild(backButton);
+    }
+
+    files.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'item';
+
+        if (item.type === 'folder') {
+            div.innerHTML = `
+                <div class="folder" onclick="navigateToFolder('${item.name}')">
+                    <span>📁</span>
+                    <span style="margin-left: 10px;">${item.name}</span>
+                </div>
+            `;
+        } else {
+            div.innerHTML = `
+                <div class="image-container">
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" class="item-checkbox"
+                               onchange="toggleSelection('${item.name}')"
+                               ${selectedItems.has(item.name) ? 'checked' : ''}>
+                    </div>
+                    <img src="${item.url}" alt="${item.name}" onclick="showImage('${item.url}')">
+                </div>
+                <div class="item-name">${item.name}</div>
+            `;
+        }
+
+        grid.appendChild(div);
+    });
+
+    updateUI();
+}
+
+// Initial load
+fetchFiles(currentPath);
+</script>
+{% endblock %}

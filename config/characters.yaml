@@ -1,0 +1,12 @@
+# program/config/characters.yaml
+None:
+  description: " "
+  personality: " "
+  workflow_file: "workflows/generic-workflow.json"
+
+CHARACTER NAME:
+  physical_description: "CHARACTER PHYSICAL DESCRIPTION (WILL BE INCLUDED IN EVERY PROMPT)"
+  personality: " CHARACTER PERSONALITY OR OTHER TRAITS - THIS MAY BE ALTERED SLIGHTLY BY THE LLM DURING PROMPT GENERATION"
+  workflow_file: "workflows/character_workflow.json"
+
+

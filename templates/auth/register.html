@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block additional_styles %}
+<style>
+    .register-container {
+        max-width: 400px;
+        margin: 0 auto;
+        padding: 40px;
+        background-color: #1a1a1a;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    .register-title {
+        margin-bottom: 24px;
+        font-size: 32px;
+        text-align: center;
+        color: #ffffff;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: #cccccc;
+        font-size: 16px; /* Increased from 14px */
+    }
+
+    .form-group input {
+        width: 60%; /* Reduced width from 80% to 60% */
+        padding: 12px 16px;
+        background-color: #2a2a2a;
+        border: 1px solid #444444;
+        border-radius: 4px;
+        color: #ffffff;
+        font-size: 16px;
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .form-group input:focus {
+        border-color: #1e90ff;
+        box-shadow: 0 0 5px rgba(30, 144, 255, 0.5);
+        outline: none;
+    }
+
+    .submit-button {
+        width: 60%; /* Match the width of input fields */
+        padding: 14px 0;
+        background-color: #1e90ff;
+        border: none;
+        border-radius: 4px;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        margin: 0 auto; /* Center the button */
+        display: block;
+    }
+
+    .submit-button:hover {
+        background-color: #1c86ee;
+    }
+
+    .footer-links {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+        gap: 10px; /* Space between links */
+    }
+
+    .footer-links a {
+        color: #1e90ff;
+        text-decoration: none;
+        font-size: 16px; /* Increased from 14px */
+        transition: color 0.3s;
+    }
+
+    .footer-links a:hover {
+        color: #63b3ed;
+    }
+
+    .flash-message {
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        color: #ffffff;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .flash-error {
+        background-color: #e53e3e;
+    }
+
+    .flash-success {
+        background-color: #38a169;
+    }
+
+    .password-requirements {
+        background-color: #2a2a2a;
+        padding: 16px;
+        border-radius: 4px;
+        margin-top: 20px;
+    }
+
+    .password-requirements h3 {
+        font-size: 18px;
+        color: #ffffff;
+        margin-bottom: 12px;
+    }
+
+    .password-requirements ul {
+        list-style: disc;
+        list-style-position: inside;
+        color: #cccccc;
+        font-size: 14px;
+        padding-left: 0;
+    }
+
+    @media (max-width: 480px) {
+        .register-container {
+            padding: 20px;
+        }
+
+        .register-title {
+            font-size: 24px;
+        }
+
+        .form-group label,
+        .footer-links a {
+            font-size: 14px; /* Adjust font size for smaller screens */
+        }
+
+        .form-group input,
+        .submit-button {
+            width: 80%; /* Adjust width for smaller screens */
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="register-page">
+    <div class="register-container">
+        <h2 class="register-title">Create New Account</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message {% if category == 'error' %}flash-error{% else %}flash-success{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form action="{{ url_for('auth.register') }}" method="POST">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input id="username" name="username" type="text" required placeholder="Enter your username">
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input id="email" name="email" type="email" required placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" required placeholder="Enter your password">
+            </div>
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input id="confirm_password" name="confirm_password" type="password" required placeholder="Confirm your password">
+            </div>
+            <button type="submit" class="submit-button">Register</button>
+        </form>
+
+        <div class="footer-links">
+            <a href="{{ url_for('auth.login') }}">Already have an account? Sign in</a>
+        </div>
+
+        <div class="password-requirements">
+            <h3>Password Requirements:</h3>
+            <ul>
+                <li>At least 8 characters long</li>
+                <li>Must contain at least one uppercase letter</li>
+                <li>Must contain at least one lowercase letter</li>
+                <li>Must contain at least one number</li>
+                <li>Must contain at least one special character (!@#$%^&*)</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

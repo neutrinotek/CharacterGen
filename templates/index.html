@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="errorAlert" style="position: fixed; top: 80px; right: 20px; padding: 15px; border-radius: 5px; color: white; z-index: 1000; display: none; max-width: 300px; background-color: #dc2626;"></div>
+
+<!-- Main container with fixed header -->
+<div style="display: flex; flex-direction: column; height: 100vh;">
+    <!-- Main content area below header -->
+    <div style="display: flex; flex: 1; overflow: hidden;">
+        <!-- Fixed Left Panel -->
+        <div style="width: 300px; padding: 20px; border-right: 1px solid #ccc; background-color: #1a1a1a; overflow-y: auto; height: 100%;">
+            <!-- Character Selection -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 5px; color: white;">Select Character:</label>
+                <select id="character-select" name="character" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #666; border-radius: 4px; background-color: #2d2d2d; color: white;">
+                    {% for character in characters %}
+                    <option value="{{ character }}" {% if character == selected_character %}selected{% endif %}>
+                        {{ character }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Random Generation -->
+            <div style="margin-bottom: 20px;">
+                <button onclick="handleGenerateClick('Random generation', '/generate_new_image')"
+                        style="width: 100%; padding: 8px; border: 1px solid #666; border-radius: 4px; background-color: #404040; color: white; cursor: pointer; transition: all 0.2s;">
+                    Random Generation
+                </button>
+            </div>
+
+            <!-- Regenerate -->
+            <div style="margin-bottom: 20px;">
+                <button onclick="handleGenerateClick('Regeneration', '/regenerate_image')"
+                        style="width: 100%; padding: 8px; border: 1px solid #666; border-radius: 4px; background-color: #404040; color: white; cursor: pointer; transition: all 0.2s;">
+                    Regenerate Image
+                </button>
+            </div>
+
+            <!-- Prompt Input -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 5px; color: white;">Enter Prompt:</label>
+                <textarea id="manual-prompt"
+                          style="width: 100%; height: 100px; padding: 8px; margin-bottom: 10px; border: 1px solid #666; border-radius: 4px; background-color: #2d2d2d; color: white; resize: vertical;"
+                          placeholder="Enter your prompt here..."></textarea>
+
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="handleGenerateClick('Manual generation', '/manual_generation')"
+                            style="flex: 1; padding: 8px; border: 1px solid #666; border-radius: 4px; background-color: #404040; color: white; cursor: pointer; transition: all 0.2s;">
+                        Manual Generation
+                    </button>
+                    <button onclick="handleGenerateClick('Enhanced generation', '/enhanced_generation')"
+                            style="flex: 1; padding: 8px; border: 1px solid #666; border-radius: 4px; background-color: #404040; color: white; cursor: pointer; transition: all 0.2s;">
+                        Enhanced Generation
+                    </button>
+                </div>
+            </div>
+
+            <!-- Advanced Options -->
+            <div id="advancedOptions"></div>
+        </div>
+
+        <!-- Right Content Panel -->
+        <div style="flex: 1; padding: 20px; overflow-y: auto; height: 100%;">
+            <h3 id="current-prompt" style="color: white; margin-top: 0;">Current Prompt:</h3>
+            <div style="background-color: #2d2d2d; padding: 15px; border-radius: 5px; margin-bottom: 20px; color: white;">
+                {{ prompt if prompt else "No prompt generated yet." }}
+            </div>
+
+            <h3 id="generated-image" style="color: white;">Generated Image:</h3>
+            <div style="max-width: 100%;">
+                {% if image_url %}
+                    <img src="{{ image_url }}" alt="Generated Image" style="max-width: 100%; height: auto; border-radius: 5px;">
+                {% else %}
+                    <div style="color: #888; text-align: center; padding: 20px; background: #2d2d2d; border-radius: 5px;">
+                        No image generated yet.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading indicator -->
+<div id="loading-indicator" style="position: fixed; top: 20px; right: 20px; padding: 10px 20px; border-radius: 4px; background-color: #404040; color: white; display: none; z-index: 1000; border: 1px solid #666; display: none; align-items: center;">
+    <span style="display: inline-block; margin-right: 8px; animation: spin 1s linear infinite;">⭮</span>
+    <span id="loading-message"></span>
+</div>
+
+<style>
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    button:hover {
+        background-color: #505050 !important;
+    }
+
+    button:active {
+        transform: scale(0.98);
+    }
+
+    button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed !important;
+    }
+</style>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<script type="module">
+    import AdvancedOptions from '/js/AdvancedOptions.js';
+
+    const container = document.getElementById('advancedOptions');
+    ReactDOM.createRoot(container).render(
+        React.createElement(AdvancedOptions, {
+            onOptionsChange: async (options) => {
+                try {
+                    const characterSelect = document.getElementById('character-select');
+                    const response = await fetch('/api/workflow-options', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            character: characterSelect.value,
+                            options: options
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to update workflow options');
+                    }
+                } catch (error) {
+                    console.error('Error updating workflow options:', error);
+                }
+            }
+        })
+    );
+</script>
+
+<script>
+    let isGenerating = false;
+
+    function showLoading(message) {
+        const indicator = document.getElementById('loading-indicator');
+        const messageElement = document.getElementById('loading-message');
+        messageElement.textContent = message;
+        indicator.style.display = 'flex';
+
+        // Disable all buttons
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(button => {
+            button.disabled = true;
+        });
+    }
+
+    function hideLoading() {
+        const indicator = document.getElementById('loading-indicator');
+        indicator.style.display = 'none';
+
+        // Re-enable all buttons
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(button => {
+            button.disabled = false;
+        });
+    }
+
+    async function handleGenerateClick(action, buttonId) {
+        if (isGenerating) return;
+
+        isGenerating = true;
+        showLoading(`${action} in progress...`);
+
+        try {
+            const characterSelect = document.getElementById('character-select');
+            const manualPrompt = document.getElementById('manual-prompt');
+
+            const formData = new FormData();
+            formData.append('character', characterSelect.value);
+
+            if ((buttonId === '/manual_generation' || buttonId === '/enhanced_generation') && manualPrompt) {
+                formData.append('manual_prompt', manualPrompt.value);
+            }
+
+            const response = await fetch(buttonId, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                window.location.reload();
+            } else {
+                throw new Error('Generation failed');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showLoading('Error occurred during generation');
+            setTimeout(hideLoading, 3000);
+        } finally {
+            isGenerating = false;
+        }
+    }
+</script>
+{% endblock %}

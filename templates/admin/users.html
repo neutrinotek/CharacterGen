@@ -1,0 +1,461 @@
+{% extends "base.html" %}
+
+{% block additional_styles %}
+<style>
+    /* Additional styles for the user management page */
+    .user-management-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        color: white;
+    }
+
+    .user-management-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+    }
+
+    .user-management-header h1 {
+        margin: 0;
+        font-size: 32px;
+        color: #fff;
+    }
+
+    .user-card {
+        background-color: #1a1a1a;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 40px;
+    }
+
+    .user-card h2 {
+        font-size: 24px;
+        margin-bottom: 20px;
+        color: #fff;
+    }
+
+    .user-table-responsive {
+        overflow-x: auto;
+    }
+
+    .user-table {
+        width: 100%;
+        border-collapse: collapse;
+        color: #ccc;
+    }
+
+    .user-table thead {
+        background-color: #333;
+    }
+
+    .user-table th, .user-table td {
+        padding: 12px 15px;
+        text-align: left;
+        border-bottom: 1px solid #444;
+    }
+
+    .user-table th {
+        font-weight: bold;
+        color: #aaa;
+    }
+
+    .user-table tbody tr:hover {
+        background-color: #2a2a2a;
+    }
+
+    .user-action-buttons {
+        display: flex;
+        gap: 10px;
+    }
+
+    .user-btn {
+        padding: 8px 12px;
+        border: none;
+        border-radius: 4px;
+        color: #fff;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .user-btn-approve {
+        background-color: #28a745;
+    }
+
+    .user-btn-approve:hover {
+        background-color: #218838;
+    }
+
+    .user-btn-reject, .user-btn-delete, .user-btn-deactivate {
+        background-color: #dc3545;
+    }
+
+    .user-btn-reject:hover, .user-btn-delete:hover, .user-btn-deactivate:hover {
+        background-color: #c82333;
+    }
+
+    .user-btn-activate {
+        background-color: #28a745;
+    }
+
+    .user-btn-activate:hover {
+        background-color: #218838;
+    }
+
+    .user-btn-admin, .user-btn-remove-admin {
+        background-color: #007bff;
+    }
+
+    .user-btn-admin:hover, .user-btn-remove-admin:hover {
+        background-color: #0069d9;
+    }
+
+    .user-status-badge {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        color: #fff;
+    }
+
+    .user-status-active {
+        background-color: #28a745;
+    }
+
+    .user-status-inactive {
+        background-color: #dc3545;
+    }
+
+    .user-modal {
+        display: none;
+        position: fixed;
+        z-index: 1001;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.8);
+    }
+
+    .user-modal-content {
+        background-color: #1a1a1a;
+        margin: 10% auto;
+        padding: 20px;
+        border: 1px solid #333;
+        width: 80%;
+        max-width: 500px;
+        border-radius: 8px;
+    }
+
+    .user-modal-content h2 {
+        margin-top: 0;
+        color: #fff;
+    }
+
+    .user-modal-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .user-btn-cancel {
+        background-color: #6c757d;
+    }
+
+    .user-btn-cancel:hover {
+        background-color: #5a6268;
+    }
+
+    /* Admin navigation bar styles */
+    .admin-nav {
+        background-color: #1a1a1a;
+        border-bottom: 1px solid #333;
+        padding: 10px 20px;
+        display: flex;
+        gap: 20px;
+    }
+
+    .admin-nav a {
+        color: #888;
+        text-decoration: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+    }
+
+    .admin-nav a:hover {
+        background-color: #333;
+    }
+
+    .admin-nav a.active {
+        color: white;
+        background-color: #404040;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Admin Navigation Bar -->
+<div class="admin-nav">
+    <a href="{{ url_for('admin.dashboard') }}" class="{% if request.endpoint == 'admin.dashboard' %}active{% endif %}">Dashboard</a>
+    <a href="{{ url_for('admin.users') }}" class="{% if request.endpoint == 'admin.users' %}active{% endif %}">Users</a>
+    <a href="{{ url_for('admin.password_resets') }}" class="{% if request.endpoint == 'admin.password_resets' %}active{% endif %}">Password Resets</a>
+    <a href="{{ url_for('admin.settings') }}" class="{% if request.endpoint == 'admin.settings' %}active{% endif %}">Settings</a>
+</div>
+
+<div class="user-management-container">
+    <!-- Header -->
+    <div class="user-management-header">
+        <h1>User Management</h1>
+    </div>
+
+    <!-- Pending Users Section -->
+    {% if pending_users %}
+    <div class="user-card">
+        <h2>Pending Users</h2>
+        <div class="user-table-responsive">
+            <table class="user-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Registration Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in pending_users %}
+                    <tr>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>
+                            <div class="user-action-buttons">
+                                <button onclick="approveUser({{ user.id }})" class="user-btn user-btn-approve">
+                                    Approve
+                                </button>
+                                <button onclick="rejectUser({{ user.id }})" class="user-btn user-btn-reject">
+                                    Reject
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Active Users Section -->
+    <div class="user-card">
+        <h2>Active Users</h2>
+        <div class="user-table-responsive">
+            <table class="user-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Last Login</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in approved_users %}
+                    <tr>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            <span class="user-status-badge {% if user.role == 'admin' %}user-status-active{% else %}user-status-inactive{% endif %}">
+                                {{ user.role.capitalize() }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="user-status-badge {% if user.is_active %}user-status-active{% else %}user-status-inactive{% endif %}">
+                                {{ 'Active' if user.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td>{{ user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else 'Never' }}</td>
+                        <td>
+                            <div class="user-action-buttons">
+                                {% if user.id != session.user_id %}
+                                    {% if user.is_active %}
+                                    <button onclick="toggleUserStatus({{ user.id }}, 'active')" class="user-btn user-btn-deactivate">
+                                        Deactivate
+                                    </button>
+                                    {% else %}
+                                    <button onclick="toggleUserStatus({{ user.id }}, 'active')" class="user-btn user-btn-activate">
+                                        Activate
+                                    </button>
+                                    {% endif %}
+
+                                    {% if user.role == 'admin' %}
+                                    <button onclick="toggleUserStatus({{ user.id }}, 'admin')" class="user-btn user-btn-remove-admin">
+                                        Remove Admin
+                                    </button>
+                                    {% else %}
+                                    <button onclick="toggleUserStatus({{ user.id }}, 'admin')" class="user-btn user-btn-admin">
+                                        Make Admin
+                                    </button>
+                                    {% endif %}
+
+                                    <button onclick="showDeleteConfirmation({{ user.id }})" class="user-btn user-btn-delete">
+                                        Delete
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Rejected Users Section -->
+    {% if rejected_users %}
+    <div class="user-card">
+        <h2>Rejected Users</h2>
+        <div class="user-table-responsive">
+            <table class="user-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Rejection Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in rejected_users %}
+                    <tr>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else '' }}</td>
+                        <td>
+                            <div class="user-action-buttons">
+                                <button onclick="approveUser({{ user.id }})" class="user-btn user-btn-approve">
+                                    Approve
+                                </button>
+                                <button onclick="showDeleteConfirmation({{ user.id }})" class="user-btn user-btn-delete">
+                                    Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirmationModal" class="user-modal">
+    <div class="user-modal-content">
+        <h2>Confirm Action</h2>
+        <p id="confirmationMessage"></p>
+        <div class="user-modal-buttons">
+            <button onclick="hideConfirmationModal()" class="user-btn user-btn-cancel">
+                Cancel
+            </button>
+            <button id="confirmButton" class="user-btn user-btn-delete">
+                Confirm
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function approveUser(userId) {
+        fetch(`/admin/user/${userId}/approve`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                window.location.reload();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function rejectUser(userId) {
+        fetch(`/admin/user/${userId}/reject`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                window.location.reload();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function toggleUserStatus(userId, type) {
+        const action = type === 'admin' ? 'toggle_admin' : 'toggle_active';
+        fetch(`/admin/user/${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({ action: action })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                window.location.reload();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function showDeleteConfirmation(userId) {
+        const modal = document.getElementById('confirmationModal');
+        const confirmButton = document.getElementById('confirmButton');
+        const message = document.getElementById('confirmationMessage');
+
+        message.textContent = 'Are you sure you want to delete this user?';
+        modal.style.display = 'block';
+
+        confirmButton.onclick = () => {
+            fetch(`/admin/user/${userId}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    window.location.reload();
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        };
+    }
+
+    function hideConfirmationModal() {
+        const modal = document.getElementById('confirmationModal');
+        modal.style.display = 'none';
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('confirmationModal');
+        if (event.target == modal) {
+            modal.style.display = 'none';
+        }
+    }
+</script>
+{% endblock %}

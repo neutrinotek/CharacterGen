@@ -1,0 +1,37 @@
+# Server Configuration
+server:
+  host: '0.0.0.0'
+  port: 4568
+  debug: true
+
+# Security Configuration
+security:
+  secret_key: 'your-secret-key-here'  # Change this in production!
+  session_lifetime: 3600  # Session lifetime in seconds
+  max_login_attempts: 5   # Maximum failed login attempts before temporary lockout
+  lockout_time: 300      # Lockout time in seconds
+  password_min_length: 8
+  require_special_chars: true
+  require_numbers: true
+  require_uppercase: true
+
+# Database Configuration
+database:
+  track_modifications: false
+
+# External Services
+services:
+  llm:
+    url: 'http://"YOUR OLLAMA IP HERE"/api/generate'
+    model: 'dolphin-llama3.1-8b:latest'
+    timeout: 300  # seconds
+  comfyui:
+    base_url: 'http://"YOUR COMFYUI IP ADDRESS"'
+    ws_url: 'ws://"YOUR COMFYUI IP ADDRESS"'
+    timeout: 300  # seconds
+
+# File Paths
+paths:
+  comfyui_dir: '/PATH/TO/COMFY/INSTALL'
+  uploads_dir: 'static/uploads'
+  temp_dir: 'static/temp'
