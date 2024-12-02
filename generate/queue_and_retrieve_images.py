@@ -472,6 +472,22 @@ def get_images_via_websocket(prompt_id, timeout=TIMEOUT):
 
     return generated_images, history
 
+def save_user_latest_image(image_data, user_id):
+    """Save image to user's specific directory."""
+    try:
+        # Create user directory if it doesn't exist
+        user_image_dir = os.path.join(STATIC_IMAGES_FOLDER, str(user_id))
+        os.makedirs(user_image_dir, exist_ok=True)
+
+        # Save image to user's directory
+        user_image_path = os.path.join(user_image_dir, LATEST_IMAGE_NAME)
+        with open(user_image_path, 'wb') as f:
+            f.write(image_data)
+        print(f"Saved user's latest image: {user_image_path}")
+        return True
+    except Exception as e:
+        print(f"Error saving user's latest image: {e}", file=sys.stderr)
+        return False
 
 def save_images(images, prompt_id, character_name, history):
     """Save generated images with metadata."""
@@ -479,43 +495,33 @@ def save_images(images, prompt_id, character_name, history):
         print("No images to save.", file=sys.stderr)
         return
 
-    # Get workflow data and prompt
     workflow_data = history.get('prompt', {})
     prompt_text = get_prompt_from_history(history)
 
-    # Extract and save seed - Enhanced logging
-    print("Attempting to extract and save seed...")
     seed = extract_seed_from_workflow(workflow_data)
     if seed != -1:
         print(f"Found seed: {seed}")
         if save_seed_to_file(seed):
             print(f"Successfully saved seed {seed} to file")
-        else:
-            print("Failed to save seed to file", file=sys.stderr)
-    else:
-        print("No valid seed found in workflow", file=sys.stderr)
 
     print(f"Seed: {seed}")
 
     if prompt_text:
         print(f"Saving images with prompt: {prompt_text}")
-    else:
-        print("Warning: No prompt text found in history", file=sys.stderr)
 
-    # First, save the latest image to static directory
     try:
         if images:  # Check if we have any images
             image_data, _ = images[0]  # Get the first image
-            latest_image_path = os.path.join(STATIC_IMAGES_FOLDER, LATEST_IMAGE_NAME)
-
-            # Save with metadata
-            save_image_with_metadata(image_data, latest_image_path, workflow_data, prompt_id, prompt_text)
-            print(f"Saved latest image with metadata: {latest_image_path}")
+            
+            # Save to user-specific directory if user_id is available
+            if 'user_id' in os.environ:
+                user_id = int(os.environ['user_id'])
+                save_user_latest_image(image_data, user_id)
 
     except Exception as e:
         print(f"Error saving latest image: {e}", file=sys.stderr)
 
-    # Then save images to character directory
+    # Save images to character directory as before
     character_dir = get_character_directory(character_name)
     print(f"Saving to character directory: {character_dir}")
 
@@ -523,15 +529,10 @@ def save_images(images, prompt_id, character_name, history):
         try:
             image_filename = generate_image_filename(character_name, idx if len(images) > 1 else None)
             image_path = os.path.join(character_dir, image_filename)
-
-            # Save with metadata
             save_image_with_metadata(image_data, image_path, workflow_data, prompt_id, prompt_text)
             print(f"Saved character image with metadata: {image_path}")
-
         except Exception as e:
             print(f"Error processing image {idx}: {e}", file=sys.stderr)
-            print(f"Character directory: {character_dir}")
-            print(f"Attempted image path: {image_path}")
 
 
 def main(prompt_text, character_name):

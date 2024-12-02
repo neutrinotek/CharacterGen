@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import AdvancedOptions from './AdvancedOptions';
 
 const LoadingStates = () => {
@@ -11,7 +13,9 @@ const LoadingStates = () => {
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const response = await fetch('/api/available-models');
+        const response = await fetch('/api/available-models', {
+          credentials: 'include'
+        });
         if (response.ok) {
           const data = await response.json();
           setAvailableModels(data);
@@ -49,119 +53,125 @@ const LoadingStates = () => {
     }
   };
 
-const handleGenerateClick = async (action, buttonId) => {
+  const handleGenerateClick = async (action, buttonId) => {
     setIsGenerating(true);
     setLoadingMessage(`${action} in progress...`);
 
     try {
-        const characterSelect = document.getElementById('character-select');
-        const manualPrompt = document.getElementById('manual-prompt');
+      const characterSelect = document.getElementById('character-select');
+      const manualPrompt = document.getElementById('manual-prompt');
 
-        const formData = new FormData();
-        formData.append('character', characterSelect.value);
+      const formData = new FormData();
+      formData.append('character', characterSelect.value);
 
-        if ((buttonId === '/manual_generation' || buttonId === '/enhanced_generation') && manualPrompt) {
-            formData.append('manual_prompt', manualPrompt.value);
-        }
+      if ((buttonId === '/manual_generation' || buttonId === '/enhanced_generation') && manualPrompt) {
+        formData.append('manual_prompt', manualPrompt.value);
+      }
 
-        // Add the current advanced options to the form data
-        if (workflowOptions) {
-            formData.append('advancedOptions', JSON.stringify(workflowOptions));
-        }
+      // Add the current advanced options to the form data
+      if (workflowOptions) {
+        formData.append('advancedOptions', JSON.stringify(workflowOptions));
+      }
 
-        // Update workflow options before generating
-        if (workflowOptions) {
-            await updateWorkflowOptions(workflowOptions);
-        }
+      // Update workflow options before generating
+      if (workflowOptions) {
+        await updateWorkflowOptions(workflowOptions);
+      }
 
-        const response = await fetch(buttonId, {
-            method: 'POST',
-            body: formData,
-        });
+      const response = await fetch(buttonId, {
+        method: 'POST',
+        body: formData,
+      });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-        const result = await response.json();
-        if (result.success) {
-            window.location.reload();
-        } else {
-            throw new Error('Generation failed');
-        }
+      const result = await response.json();
+      if (result.success) {
+        window.location.reload();
+      } else {
+        throw new Error('Generation failed');
+      }
     } catch (error) {
-        console.error('Error:', error);
-        setLoadingMessage('Error occurred during generation');
+      console.error('Error:', error);
+      setLoadingMessage('Error occurred during generation');
     } finally {
-        setTimeout(() => {
-            setIsGenerating(false);
-            setLoadingMessage('');
-        }, 3000);
+      setTimeout(() => {
+        setIsGenerating(false);
+        setLoadingMessage('');
+      }, 3000);
     }
-};
+  };
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="space-y-4">
-        {/* Random Generation Button */}
-        <button
-          onClick={() => handleGenerateClick('Random generation', '/generate_new_image')}
-          disabled={isGenerating}
-          className="w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isGenerating && (
-            <span className="inline-block animate-spin mr-2">⭮</span>
-          )}
-          Random Generation
-        </button>
-
-        {/* Regenerate Button */}
-        <button
-          onClick={() => handleGenerateClick('Regeneration', '/regenerate_image')}
-          disabled={isGenerating}
-          className="w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isGenerating && (
-            <span className="inline-block animate-spin mr-2">⭮</span>
-          )}
-          Regenerate Image
-        </button>
-
-        {/* Manual Input Section */}
-        <div className="space-y-2">
-          <textarea
-            id="manual-prompt"
-            className="w-full p-2 rounded bg-gray-700 text-white"
-            placeholder="Enter your prompt here..."
-            rows={4}
-          />
-          <div className="flex gap-2">
-            {/* Manual Generation Button */}
-            <button
-              onClick={() => handleGenerateClick('Manual generation', '/manual_generation')}
+      <Card>
+        <CardContent className="p-4">
+          <div className="space-y-4">
+            {/* Random Generation Button */}
+            <Button
+              onClick={() => handleGenerateClick('Random generation', '/generate_new_image')}
               disabled={isGenerating}
-              className="flex-1 p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-blue-500 hover:bg-blue-600"
             >
               {isGenerating && (
                 <span className="inline-block animate-spin mr-2">⭮</span>
               )}
-              Manual Generation
-            </button>
-            {/* Enhanced Generation Button */}
-            <button
-              onClick={() => handleGenerateClick('Enhanced generation', '/enhanced_generation')}
+              Random Generation
+            </Button>
+
+            {/* Regenerate Button */}
+            <Button
+              onClick={() => handleGenerateClick('Regeneration', '/regenerate_image')}
               disabled={isGenerating}
-              className="flex-1 p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-blue-500 hover:bg-blue-600"
             >
               {isGenerating && (
                 <span className="inline-block animate-spin mr-2">⭮</span>
               )}
-              Enhanced Generation
-            </button>
+              Regenerate Image
+            </Button>
+
+            {/* Manual Input Section */}
+            <div className="space-y-2">
+              <textarea
+                id="manual-prompt"
+                className="w-full p-2 rounded bg-gray-700 text-white"
+                placeholder="Enter your prompt here..."
+                rows={4}
+              />
+              <div className="flex gap-2">
+                {/* Manual Generation Button */}
+                <Button
+                  onClick={() => handleGenerateClick('Manual generation', '/manual_generation')}
+                  disabled={isGenerating}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600"
+                >
+                  {isGenerating && (
+                    <span className="inline-block animate-spin mr-2">⭮</span>
+                  )}
+                  Manual Generation
+                </Button>
+                {/* Enhanced Generation Button */}
+                <Button
+                  onClick={() => handleGenerateClick('Enhanced generation', '/enhanced_generation')}
+                  disabled={isGenerating}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600"
+                >
+                  {isGenerating && (
+                    <span className="inline-block animate-spin mr-2">⭮</span>
+                  )}
+                  Enhanced Generation
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Advanced Options */}
+      {/* Advanced Options */}
+      <div className="mt-4">
         <AdvancedOptions
           availableModels={availableModels}
           onOptionsChange={setWorkflowOptions}

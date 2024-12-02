@@ -1,15 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Folder, Image, ChevronLeft, Trash2 } from 'lucide-react';
+import { ChevronLeft, Folder, Image, Trash2 } from 'lucide-react';
 
 const ImageBrowser = () => {
   const [currentPath, setCurrentPath] = useState('/');
   const [currentFiles, setCurrentFiles] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedItems, setSelectedItems] = useState(new Set());
+  const [canDelete, setCanDelete] = useState(false);
+
+  useEffect(() => {
+    // Fetch initial files
+    fetchFiles(currentPath);
+
+    // Fetch user permissions
+    fetch('/api/user/permissions', {
+      credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(data => {
+      setCanDelete(data.can_delete_files);
+    })
+    .catch(error => console.error('Error fetching permissions:', error));
+  }, []);
 
   const navigateBack = () => {
     if (currentPath === '/') return;
@@ -29,6 +45,9 @@ const ImageBrowser = () => {
   const fetchFiles = async (path) => {
     try {
       const response = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch files');
+      }
       const data = await response.json();
       setCurrentFiles(data);
     } catch (error) {
@@ -49,7 +68,9 @@ const ImageBrowser = () => {
   };
 
   const selectAll = () => {
-    const newSelection = new Set(currentFiles.map(item => item.name));
+    const newSelection = new Set(currentFiles
+      .filter(item => item.type === 'file')
+      .map(item => item.name));
     setSelectedItems(newSelection);
   };
 
@@ -57,7 +78,9 @@ const ImageBrowser = () => {
     setSelectedItems(new Set());
   };
 
-  const deleteSelectedItems = async () => {
+  const deleteSelected = async () => {
+    if (!canDelete) return;
+
     try {
       const response = await fetch('/api/delete-files', {
         method: 'POST',
@@ -71,12 +94,8 @@ const ImageBrowser = () => {
       });
 
       if (response.ok) {
-        // Refresh the file list
-        fetchFiles(currentPath);
-        // Clear selections
+        await fetchFiles(currentPath);
         setSelectedItems(new Set());
-      } else {
-        console.error('Failed to delete files');
       }
     } catch (error) {
       console.error('Error deleting files:', error);
@@ -99,47 +118,49 @@ const ImageBrowser = () => {
           </span>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            onClick={selectAll}
-            className="text-sm"
-          >
-            Select All
-          </Button>
-          <Button
-            variant="outline"
-            onClick={deselectAll}
-            className="text-sm"
-          >
-            Deselect All
-          </Button>
+        {canDelete && (
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              onClick={selectAll}
+              className="text-sm"
+            >
+              Select All
+            </Button>
+            <Button
+              variant="outline"
+              onClick={deselectAll}
+              className="text-sm"
+            >
+              Deselect All
+            </Button>
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="destructive"
-                disabled={selectedItems.size === 0}
-                className="text-sm"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete Selected
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Selected Items</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete {selectedItems.size} selected item(s)? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={deleteSelectedItems}>Delete</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  disabled={selectedItems.size === 0}
+                  className="text-sm"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Selected
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Selected Items</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete {selectedItems.size} selected item(s)? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={deleteSelected}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -148,7 +169,7 @@ const ImageBrowser = () => {
             <CardContent className="p-4">
               {item.type === 'folder' ? (
                 <div
-                  className="flex items-center space-x-2"
+                  className="flex items-center space-x-2 cursor-pointer"
                   onClick={() => navigateToFolder(item.name)}
                 >
                   <Folder className="w-6 h-6 text-blue-500" />
@@ -156,13 +177,15 @@ const ImageBrowser = () => {
                 </div>
               ) : (
                 <div className="relative">
-                  <div className="absolute top-2 left-2 z-10">
-                    <Checkbox
-                      checked={selectedItems.has(item.name)}
-                      onCheckedChange={() => toggleItemSelection(item.name)}
-                      className="bg-white border-2 border-gray-300"
-                    />
-                  </div>
+                  {canDelete && (
+                    <div className="absolute top-2 left-2 z-10">
+                      <Checkbox
+                        checked={selectedItems.has(item.name)}
+                        onCheckedChange={() => toggleItemSelection(item.name)}
+                        className="bg-white border-2 border-gray-300"
+                      />
+                    </div>
+                  )}
                   <div
                     className="cursor-pointer"
                     onClick={() => setSelectedImage(item.url)}

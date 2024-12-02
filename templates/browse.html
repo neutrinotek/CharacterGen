@@ -8,340 +8,252 @@
         padding: 20px;
     }
 
-    .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 20px;
+    .icon {
+        display: inline-block;
+        font-size: 1.5rem;
+        line-height: 1;
     }
 
-    .item {
-        border: 1px solid #404040;
-        border-radius: 8px;
-        overflow: hidden;
-        cursor: pointer;
-        transition: transform 0.2s;
+    .card {
+        background-color: #1a1a1a;
+        border: 1px solid #333;
+    }
+
+    .card-content {
+        color: #fff;
+    }
+
+    .folder-item {
         background-color: #2d2d2d;
+        transition: background-color 0.2s;
     }
 
-    .item:hover {
-        transform: scale(1.02);
-        border-color: #606060;
+    .folder-item:hover {
+        background-color: #3d3d3d;
     }
 
-    .folder {
-        padding: 15px;
-        background-color: #333333;
-        display: flex;
-        align-items: center;
-    }
-
-    .folder-icon {
-        margin-right: 10px;
-        color: #007bff;
-    }
-
-    .image-container {
-        aspect-ratio: 1;
-        position: relative;
-        background-color: #333333;
-    }
-
-    .image-container img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .item-name {
-        padding: 8px;
-        text-align: center;
-        word-break: break-word;
-        color: #ffffff;
-        background-color: #2d2d2d;
-    }
-
-    .modal {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0, 0, 0, 0.9);
-        z-index: 1000;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .modal img {
-        max-width: 90%;
-        max-height: 90vh;
-        object-fit: contain;
-    }
-
-    .current-path {
-        background-color: #2d2d2d;
-        padding: 10px;
+    .image-name {
+        color: #fff;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 4px;
         border-radius: 4px;
-        margin-bottom: 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .controls {
-        display: flex;
-        gap: 10px;
-    }
-
-    .btn {
-        padding: 8px 16px;
-        border-radius: 4px;
-        border: 1px solid #666;
-        background-color: #404040;
-        color: white;
-        cursor: pointer;
-    }
-
-    .btn:hover {
-        background-color: #505050;
-    }
-
-    .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .btn-danger {
-        background-color: #dc2626;
-    }
-
-    .btn-danger:hover {
-        background-color: #b91c1c;
-    }
-
-    .checkbox-wrapper {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        z-index: 2;
-    }
-
-    .item-checkbox {
-        width: 20px;
-        height: 20px;
-        cursor: pointer;
-    }
-
-    .delete-modal {
-        padding: 20px;
-        background: #2d2d2d;
-        border-radius: 8px;
-        max-width: 400px;
-        color: white;
-    }
-
-    .delete-modal-footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        margin-top: 20px;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container">
-    <div id="currentPath" class="current-path">
-        <span>/</span>
-        <div class="controls">
-            <button onclick="navigateBack()" class="btn" id="backBtn" disabled>Back</button>
-            <button onclick="selectAll()" class="btn">Select All</button>
-            <button onclick="deselectAll()" class="btn">Deselect All</button>
-            <button onclick="confirmDelete()" class="btn btn-danger" id="deleteBtn" disabled>Delete Selected</button>
-        </div>
-    </div>
+<div id="imageBrowser"></div>
 
-    <div id="fileGrid" class="grid">
-        <!-- Grid items will be populated by JavaScript -->
-    </div>
+<!-- Load React -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <div id="imageModal" class="modal" onclick="closeModal()">
-        <img id="modalImage" src="" alt="Full size image">
-    </div>
+<script type="text/babel">
+const { useState, useEffect } = React;
 
-    <div id="deleteModal" class="modal">
-        <div class="delete-modal">
-            <h3 style="margin-top: 0;">Confirm Deletion</h3>
-            <p id="deleteMessage"></p>
-            <div class="delete-modal-footer">
-                <button onclick="closeDeleteModal()" class="btn">Cancel</button>
-                <button onclick="deleteSelected()" class="btn btn-danger">Delete</button>
-            </div>
-        </div>
-    </div>
-</div>
+function ImageBrowser() {
+    const [currentPath, setCurrentPath] = useState('/');
+    const [currentFiles, setCurrentFiles] = useState([]);
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [selectedItems, setSelectedItems] = useState(new Set());
+    const [canDelete, setCanDelete] = useState(false);
 
-<script>
-let currentPath = '/';
-let selectedItems = new Set();
+    useEffect(() => {
+        fetchFiles(currentPath);
 
-function closeModal() {
-    document.getElementById('imageModal').style.display = 'none';
-}
+        fetch('/api/user/permissions', {
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            setCanDelete(data.can_delete_files);
+        })
+        .catch(error => console.error('Error fetching permissions:', error));
+    }, []);
 
-function closeDeleteModal() {
-    document.getElementById('deleteModal').style.display = 'none';
-}
+    const fetchFiles = async (path) => {
+        try {
+            const response = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
+            if (!response.ok) throw new Error('Failed to fetch files');
+            const data = await response.json();
+            setCurrentFiles(data);
+        } catch (error) {
+            console.error('Error fetching files:', error);
+        }
+    };
 
-async function fetchFiles(path) {
-    try {
-        const response = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
-        const data = await response.json();
-        renderFiles(data);
-        updatePathDisplay(path);
-    } catch (error) {
-        console.error('Error fetching files:', error);
-    }
-}
+    const navigateBack = () => {
+        if (currentPath === '/') return;
+        const newPath = currentPath.split('/').slice(0, -2).join('/') + '/';
+        setCurrentPath(newPath);
+        fetchFiles(newPath);
+        setSelectedItems(new Set());
+    };
 
-function updatePathDisplay(path) {
-    document.querySelector('#currentPath span').textContent = path;
-    document.getElementById('backBtn').disabled = path === '/';
-}
+    const navigateToFolder = (folderName) => {
+        const newPath = `${currentPath}${folderName}/`;
+        setCurrentPath(newPath);
+        fetchFiles(newPath);
+        setSelectedItems(new Set());
+    };
 
-function showImage(url) {
-    const modal = document.getElementById('imageModal');
-    const modalImg = document.getElementById('modalImage');
-    modal.style.display = 'flex';
-    modalImg.src = url;
-}
-
-function navigateToFolder(folderName) {
-    currentPath += folderName + '/';
-    fetchFiles(currentPath);
-    selectedItems.clear();
-}
-
-function navigateBack() {
-    if (currentPath === '/') return;
-    const parts = currentPath.split('/').filter(p => p);
-    parts.pop();
-    currentPath = '/' + parts.join('/') + '/';
-    fetchFiles(currentPath);
-    selectedItems.clear();
-}
-
-function toggleSelection(itemName) {
-    if (selectedItems.has(itemName)) {
-        selectedItems.delete(itemName);
-    } else {
-        selectedItems.add(itemName);
-    }
-    updateUI();
-}
-
-function selectAll() {
-    const checkboxes = document.querySelectorAll('.item-checkbox');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = true;
-        selectedItems.add(checkbox.parentElement.parentElement.nextElementSibling.textContent);
-    });
-    updateUI();
-}
-
-function deselectAll() {
-    const checkboxes = document.querySelectorAll('.item-checkbox');
-    checkboxes.forEach(checkbox => checkbox.checked = false);
-    selectedItems.clear();
-    updateUI();
-}
-
-function updateUI() {
-    document.getElementById('deleteBtn').disabled = selectedItems.size === 0;
-}
-
-function confirmDelete() {
-    const modal = document.getElementById('deleteModal');
-    const message = document.getElementById('deleteMessage');
-    message.textContent = `Are you sure you want to delete ${selectedItems.size} selected item(s)? This action cannot be undone.`;
-    modal.style.display = 'flex';
-}
-
-async function deleteSelected() {
-    try {
-        const response = await fetch('/api/delete-files', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                path: currentPath,
-                files: Array.from(selectedItems)
-            }),
+    const toggleItemSelection = (itemName) => {
+        setSelectedItems(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(itemName)) {
+                newSet.delete(itemName);
+            } else {
+                newSet.add(itemName);
+            }
+            return newSet;
         });
+    };
 
-        if (response.ok) {
-            selectedItems.clear();
-            fetchFiles(currentPath);
-            closeDeleteModal();
-        } else {
-            console.error('Failed to delete files');
+    const selectAll = () => {
+        const fileNames = currentFiles
+            .filter(item => item.type === 'file')
+            .map(item => item.name);
+        setSelectedItems(new Set(fileNames));
+    };
+
+    const deselectAll = () => {
+        setSelectedItems(new Set());
+    };
+
+    const deleteSelected = async () => {
+        if (!canDelete) return;
+        try {
+            const response = await fetch('/api/delete-files', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    path: currentPath,
+                    files: Array.from(selectedItems)
+                }),
+            });
+
+            if (response.ok) {
+                await fetchFiles(currentPath);
+                setSelectedItems(new Set());
+            }
+        } catch (error) {
+            console.error('Error deleting files:', error);
         }
-    } catch (error) {
-        console.error('Error deleting files:', error);
-    }
-}
+    };
 
-function renderFiles(files) {
-    const grid = document.getElementById('fileGrid');
-    grid.innerHTML = '';
-
-    // Add back button if not at root
-    if (currentPath !== '/') {
-        const backButton = document.createElement('div');
-        backButton.className = 'item';
-        backButton.innerHTML = `
-            <div class="folder" onclick="navigateBack()">
-                <span>📁</span>
-                <span style="margin-left: 10px;">..</span>
-            </div>
-        `;
-        grid.appendChild(backButton);
-    }
-
-    files.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'item';
-
-        if (item.type === 'folder') {
-            div.innerHTML = `
-                <div class="folder" onclick="navigateToFolder('${item.name}')">
-                    <span>📁</span>
-                    <span style="margin-left: 10px;">${item.name}</span>
+    return (
+        <div className="w-full max-w-6xl mx-auto p-4">
+            <div className="flex items-center justify-between mb-4 text-white">
+                <div className="flex items-center space-x-2">
+                    <button
+                        onClick={navigateBack}
+                        className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full text-white"
+                        disabled={currentPath === '/'}
+                    >
+                        <span className="icon">←</span>
+                    </button>
+                    <span className="text-lg font-medium">
+                        {currentPath === '/' ? 'Root' : currentPath}
+                    </span>
                 </div>
-            `;
-        } else {
-            div.innerHTML = `
-                <div class="image-container">
-                    <div class="checkbox-wrapper">
-                        <input type="checkbox" class="item-checkbox"
-                               onchange="toggleSelection('${item.name}')"
-                               ${selectedItems.has(item.name) ? 'checked' : ''}>
+
+                {canDelete && (
+                    <div className="flex items-center space-x-2">
+                        <button
+                            onClick={selectAll}
+                            className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600"
+                        >
+                            Select All
+                        </button>
+                        <button
+                            onClick={deselectAll}
+                            className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600"
+                        >
+                            Deselect All
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (confirm(`Are you sure you want to delete ${selectedItems.size} selected item(s)?`)) {
+                                    deleteSelected();
+                                }
+                            }}
+                            disabled={selectedItems.size === 0}
+                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                        >
+                            <span className="icon mr-2">🗑️</span>
+                            Delete Selected
+                        </button>
                     </div>
-                    <img src="${item.url}" alt="${item.name}" onclick="showImage('${item.url}')">
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {currentFiles.map((item, index) => (
+                    <div key={index} className="card rounded-lg overflow-hidden">
+                        <div className="p-4 card-content">
+                            {item.type === 'folder' ? (
+                                <div
+                                    className="folder-item flex items-center space-x-2 cursor-pointer p-2 rounded"
+                                    onClick={() => navigateToFolder(item.name)}
+                                >
+                                    <span className="icon">📁</span>
+                                    <span className="text-white">{item.name}</span>
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    {canDelete && (
+                                        <div className="absolute top-2 left-2 z-10">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedItems.has(item.name)}
+                                                onChange={() => toggleItemSelection(item.name)}
+                                                className="w-4 h-4 bg-gray-700 border-gray-600"
+                                            />
+                                        </div>
+                                    )}
+                                    <div
+                                        className="cursor-pointer"
+                                        onClick={() => setSelectedImage(item.url)}
+                                    >
+                                        <div className="relative w-full pt-[100%]">
+                                            <img
+                                                src={item.url}
+                                                alt={item.name}
+                                                className="absolute top-0 left-0 w-full h-full object-cover rounded"
+                                            />
+                                        </div>
+                                        <div className="mt-2 text-sm text-center">
+                                            <span className="image-name">{item.name}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {selectedImage && (
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+                    onClick={() => setSelectedImage(null)}
+                >
+                    <img
+                        src={selectedImage}
+                        alt="Selected"
+                        className="max-w-full max-h-[90vh] object-contain"
+                    />
                 </div>
-                <div class="item-name">${item.name}</div>
-            `;
-        }
-
-        grid.appendChild(div);
-    });
-
-    updateUI();
+            )}
+        </div>
+    );
 }
 
-// Initial load
-fetchFiles(currentPath);
+// Mount the component
+const root = ReactDOM.createRoot(document.getElementById('imageBrowser'));
+root.render(React.createElement(ImageBrowser));
 </script>
 {% endblock %}

@@ -106,21 +106,361 @@
     }
 </style>
 
+<!-- React and Dependencies -->
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-<script type="module">
-    import AdvancedOptions from '/js/AdvancedOptions.js';
+<!-- Advanced Options Component -->
+<script type="text/babel">
+    const AdvancedOptions = ({ onOptionsChange }) => {
+        const [isExpanded, setIsExpanded] = React.useState(false);
+        const [lastUsedSeed, setLastUsedSeed] = React.useState(-1);
+        const [availableModels, setAvailableModels] = React.useState({
+            checkpoints: [],
+            loras: []
+        });
+        const [loadingError, setLoadingError] = React.useState(null);
+        const [options, setOptions] = React.useState(() => {
+            const savedOptions = localStorage.getItem('advancedOptions');
+            return savedOptions ? JSON.parse(savedOptions) : {
+                checkpointModel: '',
+                width: 1024,
+                height: 1024,
+                guidance: 3,
+                seed: -1,
+                useLastSeed: false,
+                loras: [{ name: '', strength: 1.0 }]
+            };
+        });
 
+        const fetchLastSeed = React.useCallback(async () => {
+            try {
+                const response = await fetch('/api/last-seed', {
+                    credentials: 'include'
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                setLastUsedSeed(data.seed);
+            } catch (error) {
+                console.error('Error fetching last seed:', error);
+                setLoadingError('Failed to fetch last seed');
+            }
+        }, []);
+
+        const resetToDefaults = async () => {
+            try {
+                const characterSelect = document.getElementById('character-select');
+                const character = characterSelect.value;
+
+                const defaultOptions = {
+                    checkpointModel: '',
+                    width: 1024,
+                    height: 1024,
+                    guidance: 3,
+                    seed: -1,
+                    useLastSeed: false,
+                    loras: [{ name: '', strength: 1.0 }]
+                };
+
+                const response = await fetch(`/api/get-default-workflow?character=${character}`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch default workflow');
+                }
+
+                const workflow = await response.json();
+                console.log('Fetched workflow:', workflow);
+
+                // Look through all nodes to find relevant settings
+                Object.values(workflow).forEach(node => {
+                    if (node && node.inputs) {
+                        if (node.inputs.ckpt_name) defaultOptions.checkpointModel = node.inputs.ckpt_name;
+                        if (node.inputs.width) defaultOptions.width = node.inputs.width;
+                        if (node.inputs.height) defaultOptions.height = node.inputs.height;
+                        if (node.inputs.guidance) defaultOptions.guidance = node.inputs.guidance;
+                        if (node.inputs.seed !== undefined) defaultOptions.seed = node.inputs.seed;
+                    }
+                });
+
+                console.log('Setting default options:', defaultOptions);
+                setOptions(defaultOptions);
+                localStorage.setItem('advancedOptions', JSON.stringify(defaultOptions));
+
+                if (onOptionsChange) {
+                    onOptionsChange(defaultOptions);
+                }
+            } catch (error) {
+                console.error('Error in resetToDefaults:', error);
+                setLoadingError('Failed to reset to defaults');
+            }
+        };
+
+        React.useEffect(() => {
+            const fetchModels = async () => {
+                try {
+                    const response = await fetch('/api/available-models', {
+                        credentials: 'include'
+                    });
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    console.log('Available models:', data);
+
+                    if (!data.checkpoints || !data.loras) {
+                        throw new Error('Invalid model data received');
+                    }
+
+                    setAvailableModels(data);
+
+                    if (!options.checkpointModel || !data.checkpoints.includes(options.checkpointModel)) {
+                        if (data.checkpoints.length > 0) {
+                            setOptions(prev => ({
+                                ...prev,
+                                checkpointModel: data.checkpoints[0]
+                            }));
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching models:', error);
+                    setLoadingError(error.message);
+                }
+            };
+
+            fetchModels();
+            fetchLastSeed();
+
+            const intervalId = setInterval(fetchLastSeed, 5000);
+            return () => clearInterval(intervalId);
+        }, [fetchLastSeed]);
+
+        React.useEffect(() => {
+            if (options.checkpointModel) {
+                localStorage.setItem('advancedOptions', JSON.stringify(options));
+                if (onOptionsChange) {
+                    onOptionsChange(options);
+                }
+            }
+        }, [options, onOptionsChange]);
+
+        const handleLoraChange = (index, field, value) => {
+            const newLoras = [...options.loras];
+            newLoras[index] = { ...newLoras[index], [field]: value };
+            setOptions({ ...options, loras: newLoras });
+        };
+
+        const addLora = () => {
+            if (options.loras.length < 5) {
+                setOptions({
+                    ...options,
+                    loras: [...options.loras, { name: '', strength: 1.0 }]
+                });
+            }
+        };
+
+        const removeLora = (index) => {
+            if (index > 0) {
+                const newLoras = options.loras.filter((_, i) => i !== index);
+                setOptions({ ...options, loras: newLoras });
+            }
+        };
+
+        const handleSeedChange = (useLastSeed) => {
+            setOptions(prev => ({
+                ...prev,
+                useLastSeed,
+                seed: useLastSeed ? -1 : prev.seed
+            }));
+        };
+
+        if (loadingError) {
+            return (
+                <div className="w-full p-4 bg-red-500 text-white rounded-lg mb-4">
+                    Error: {loadingError}
+                </div>
+            );
+        }
+
+        if (!isExpanded) {
+            return (
+                <button
+                    className="w-full p-2 bg-gray-800 text-white rounded-lg mb-4 hover:bg-gray-700"
+                    onClick={() => setIsExpanded(true)}
+                >
+                    Show Advanced Options
+                </button>
+            );
+        }
+
+        return (
+            <div className="w-full bg-gray-800 rounded-lg p-4 mb-4">
+                <div className="flex justify-between items-center mb-4">
+                    <button
+                        onClick={() => setIsExpanded(false)}
+                        className="text-white hover:bg-gray-700 px-3 py-1 rounded"
+                    >
+                        Hide Advanced Options
+                    </button>
+                    <button
+                        onClick={resetToDefaults}
+                        className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                    >
+                        Reset to Defaults
+                    </button>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="block text-white">Checkpoint Model:</label>
+                        <select
+                            value={options.checkpointModel}
+                            onChange={(e) => setOptions({ ...options, checkpointModel: e.target.value })}
+                            className="w-full p-2 bg-gray-700 text-white rounded"
+                        >
+                            <option value="">Select a model</option>
+                            {availableModels.checkpoints.map(model => (
+                                <option key={model} value={model}>{model}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="block text-white">Width:</label>
+                        <input
+                            type="number"
+                            value={options.width}
+                            onChange={(e) => setOptions({ ...options, width: parseInt(e.target.value) })}
+                            className="w-full p-2 bg-gray-700 text-white rounded"
+                            min="512"
+                            max="2048"
+                            step="64"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="block text-white">Height:</label>
+                        <input
+                            type="number"
+                            value={options.height}
+                            onChange={(e) => setOptions({ ...options, height: parseInt(e.target.value) })}
+                            className="w-full p-2 bg-gray-700 text-white rounded"
+                            min="512"
+                            max="2048"
+                            step="64"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="block text-white">Guidance Scale:</label>
+                        <input
+                            type="number"
+                            value={options.guidance}
+                            onChange={(e) => setOptions({ ...options, guidance: parseFloat(e.target.value) })}
+                            className="w-full p-2 bg-gray-700 text-white rounded"
+                            min="1"
+                            max="20"
+                            step="0.1"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={options.useLastSeed}
+                                onChange={(e) => handleSeedChange(e.target.checked)}
+                                className="w-4 h-4"
+                            />
+                            <label className="text-white">
+                                Use Last Seed {lastUsedSeed !== -1 && (
+                                    <span className="text-blue-400 font-mono">({lastUsedSeed})</span>
+                                )}
+                            </label>
+                        </div>
+                        <input
+                            type="number"
+                            value={options.seed}
+                            onChange={(e) => {
+                                const newSeed = parseInt(e.target.value);
+                                setOptions({
+                                    ...options,
+                                    seed: newSeed,
+                                    useLastSeed: false
+                                });
+                            }}
+                            disabled={options.useLastSeed}
+                            className={`w-full p-2 bg-gray-700 text-white rounded ${options.useLastSeed ? 'opacity-50' : ''}`}
+                            placeholder="Random Seed (-1)"
+                        />
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <label className="text-white">Additional LoRA Models:</label>
+                            <button
+                                onClick={addLora}
+                                disabled={options.loras.length >= 5}
+                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Add LoRA
+                            </button>
+                        </div>
+                        {options.loras.map((lora, index) => (
+                            <div key={`lora-${index}`} className="flex gap-2 items-end">
+                                <div className="flex-1">
+                                    <select
+                                        value={lora.name}
+                                        onChange={(e) => handleLoraChange(index, 'name', e.target.value)}
+                                        className="w-full p-2 bg-gray-700 text-white rounded"
+                                    >
+                                        <option value="">Select LoRA</option>
+                                        {availableModels.loras.map(loraName => (
+                                            <option key={loraName} value={loraName}>{loraName}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <input
+                                    type="number"
+                                    value={lora.strength}
+                                    onChange={(e) => handleLoraChange(index, 'strength', parseFloat(e.target.value))}
+                                    className="w-24 p-2 bg-gray-700 text-white rounded"
+                                    min="0"
+                                    max="2"
+                                    step="0.1"
+                                />
+                                {index > 0 && (
+                                    <button
+                                        onClick={() => removeLora(index)}
+                                        className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                                    >
+                                        Remove
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Mount the component
     const container = document.getElementById('advancedOptions');
-    ReactDOM.createRoot(container).render(
+    const root = ReactDOM.createRoot(container);
+    root.render(
         React.createElement(AdvancedOptions, {
             onOptionsChange: async (options) => {
                 try {
                     const characterSelect = document.getElementById('character-select');
                     const response = await fetch('/api/workflow-options', {
                         method: 'POST',
+                        credentials: 'include',
                         headers: {
                             'Content-Type': 'application/json',
                         },
@@ -141,6 +481,7 @@
     );
 </script>
 
+<!-- Generation Handling Script -->
 <script>
     let isGenerating = false;
 

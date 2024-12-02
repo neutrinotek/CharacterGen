@@ -2,7 +2,7 @@
 
 {% block additional_styles %}
 <style>
-    /* Additional styles for the user management page */
+    /* Original styles */
     .user-management-container {
         max-width: 1200px;
         margin: 0 auto;
@@ -193,10 +193,139 @@
         color: white;
         background-color: #404040;
     }
-</style>
-{% endblock %}
 
-{% block content %}
+    /* Updated modal styles */
+    .model-permissions-modal {
+        display: none;
+        position: fixed;
+        z-index: 1001;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.8);
+    }
+
+    .model-permissions-content {
+        background-color: #1a1a1a;
+        margin: 5% auto;
+        padding: 20px;
+        border: 1px solid #333;
+        width: 90%;
+        max-width: 800px;
+        border-radius: 8px;
+        color: white;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    .permissions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .model-item {
+        background-color: #2d2d2d;
+        padding: 10px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .search-box {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        background-color: #2d2d2d;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: white;
+    }
+
+    .tab-container {
+        display: flex;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #444;
+    }
+
+    .permission-tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        color: #888;
+        border-bottom: 2px solid transparent;
+    }
+
+    .permission-tab.active {
+        color: white;
+        border-bottom-color: #2196F3;
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    .select-all-container {
+        margin-bottom: 10px;
+        padding: 10px;
+        background-color: #2d2d2d;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Character permissions specific styles */
+    .character-permissions-grid {
+        max-height: 400px;
+        overflow-y: auto;
+        margin-top: 1rem;
+        background-color: #1a1a1a;
+        border-radius: 4px;
+    }
+
+    .character-permissions-grid table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .character-permissions-grid th {
+        background-color: #2d2d2d;
+        padding: 8px;
+        text-align: left;
+        font-weight: bold;
+        color: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .character-permissions-grid td {
+        padding: 8px;
+        border-bottom: 1px solid #333;
+    }
+
+    .character-permissions-grid tr:hover {
+        background-color: #2d2d2d;
+    }
+
+    .permission-checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .permission-checkbox-cell {
+        text-align: center;
+    }
+</style>
 
 <!-- Admin Navigation Bar -->
 <div class="admin-nav">
@@ -304,6 +433,20 @@
                                     </button>
                                     {% endif %}
 
+                                    <button onclick="showModelPermissions({{ user.id }}, '{{ user.username }}')" class="user-btn user-btn-admin">
+                                        Access Management
+                                    </button>
+
+                                    {% if user.can_delete_files %}
+                                    <button onclick="toggleUserStatus({{ user.id }}, 'toggle_delete_permission')" class="user-btn user-btn-remove-admin">
+                                        Remove Delete Permission
+                                    </button>
+                                    {% else %}
+                                    <button onclick="toggleUserStatus({{ user.id }}, 'toggle_delete_permission')" class="user-btn user-btn-admin">
+                                        Grant Delete Permission
+                                    </button>
+                                    {% endif %}
+
                                     <button onclick="showDeleteConfirmation({{ user.id }})" class="user-btn user-btn-delete">
                                         Delete
                                     </button>
@@ -372,7 +515,75 @@
     </div>
 </div>
 
+<!-- Model and Character Permissions Modal -->
+<div id="modelPermissionsModal" class="model-permissions-modal">
+    <div class="model-permissions-content">
+        <h2 id="permissionsTitle" class="modal-title">Access Management</h2>
+
+        <div class="tab-container">
+            <div class="permission-tab active" data-tab="checkpoints">Checkpoints</div>
+            <div class="permission-tab" data-tab="loras">LoRAs</div>
+            <div class="permission-tab" data-tab="characters">Characters</div>
+        </div>
+
+        <!-- Checkpoints Tab -->
+        <div id="checkpointsTab" class="tab-content active">
+            <input type="text" class="search-box" placeholder="Search checkpoints..." oninput="filterModels('checkpoints')">
+            <div class="select-all-container">
+                <input type="checkbox" id="selectAllCheckpoints" onchange="toggleSelectAll('checkpoints')">
+                <label for="selectAllCheckpoints">Select All Checkpoints</label>
+            </div>
+            <div id="checkpointsGrid" class="permissions-grid">
+                <!-- Checkpoint items will be added here dynamically -->
+            </div>
+        </div>
+
+        <!-- LoRAs Tab -->
+        <div id="lorasTab" class="tab-content">
+            <input type="text" class="search-box" placeholder="Search LoRAs..." oninput="filterModels('loras')">
+            <div class="select-all-container">
+                <input type="checkbox" id="selectAllLoras" onchange="toggleSelectAll('loras')">
+                <label for="selectAllLoras">Select All LoRAs</label>
+            </div>
+            <div id="lorasGrid" class="permissions-grid">
+                <!-- LoRA items will be added here dynamically -->
+            </div>
+        </div>
+
+        <!-- Characters Tab -->
+        <div id="charactersTab" class="tab-content">
+            <input type="text" class="search-box" placeholder="Search characters..." oninput="filterCharacters()">
+            <div class="character-permissions-grid">
+                <table class="w-full">
+                    <thead>
+                        <tr>
+                            <th class="text-left p-2">Character</th>
+                            <th class="text-center p-2">Can Generate</th>
+                            <th class="text-center p-2">Can Browse</th>
+                        </tr>
+                    </thead>
+                    <tbody id="charactersList">
+                        <!-- Character items will be added here dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="modal-buttons">
+            <button onclick="hideModelPermissions()" class="user-btn user-btn-cancel">Cancel</button>
+            <button onclick="saveAllPermissions()" class="user-btn user-btn-admin">Save Changes</button>
+        </div>
+    </div>
+</div>
+
 <script>
+    let currentUserId = null;
+    let currentPermissions = {
+        checkpoints: [],
+        loras: []
+    };
+    let currentCharacterPermissions = [];
+
     function approveUser(userId) {
         fetch(`/admin/user/${userId}/approve`, {
             method: 'POST',
@@ -406,7 +617,9 @@
     }
 
     function toggleUserStatus(userId, type) {
-        const action = type === 'admin' ? 'toggle_admin' : 'toggle_active';
+        const action = type === 'active' ? 'toggle_active' :
+                      type === 'admin' ? 'toggle_admin' :
+                      type;
         fetch(`/admin/user/${userId}`, {
             method: 'POST',
             headers: {
@@ -421,6 +634,155 @@
             }
         })
         .catch(error => console.error('Error:', error));
+    }
+
+    async function showModelPermissions(userId, username) {
+        currentUserId = userId;
+        document.getElementById('permissionsTitle').textContent = `Access Management - ${username}`;
+        document.getElementById('modelPermissionsModal').style.display = 'block';
+
+        // Load all permissions
+        await Promise.all([
+            loadUserPermissions(userId),
+            loadCharacterPermissions(userId)
+        ]);
+    }
+
+    function hideModelPermissions() {
+        document.getElementById('modelPermissionsModal').style.display = 'none';
+        currentUserId = null;
+        currentPermissions = {
+            checkpoints: [],
+            loras: []
+        };
+        currentCharacterPermissions = [];
+    }
+
+    async function loadCharacterPermissions(userId) {
+        try {
+            const response = await fetch(`/admin/api/user/${userId}/characters`, {
+                credentials: 'include'
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            currentCharacterPermissions = await response.json();
+            renderCharacterPermissions();
+        } catch (error) {
+            console.error('Error loading character permissions:', error);
+        }
+    }
+
+    async function loadUserPermissions(userId) {
+        try {
+            const response = await fetch(`/admin/api/user/${userId}/models`);
+            const data = await response.json();
+            currentPermissions = data;
+            renderModelsGrid('checkpoints');
+            renderModelsGrid('loras');
+            updateSelectAllStatus('checkpoints');
+            updateSelectAllStatus('loras');
+        } catch (error) {
+            console.error('Error loading user permissions:', error);
+        }
+    }
+
+    function renderCharacterPermissions() {
+        const charactersList = document.getElementById('charactersList');
+        charactersList.innerHTML = '';
+
+        currentCharacterPermissions.forEach(char => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${char.name}</td>
+                <td class="permission-checkbox-cell">
+                    <input type="checkbox" class="permission-checkbox"
+                           ${char.can_generate ? 'checked' : ''}
+                           onchange="updateCharacterPermission('${char.name}', 'can_generate', this.checked)">
+                </td>
+                <td class="permission-checkbox-cell">
+                    <input type="checkbox" class="permission-checkbox"
+                           ${char.can_browse ? 'checked' : ''}
+                           onchange="updateCharacterPermission('${char.name}', 'can_browse', this.checked)">
+                </td>
+            `;
+            charactersList.appendChild(row);
+        });
+    }
+
+    function updateCharacterPermission(characterName, permissionType, value) {
+        const character = currentCharacterPermissions.find(c => c.name === characterName);
+        if (character) {
+            character[permissionType] = value;
+        }
+    }
+
+    function filterCharacters() {
+        const searchTerm = document.querySelector('#charactersTab .search-box').value.toLowerCase();
+        const rows = document.querySelectorAll('#charactersList tr');
+
+        rows.forEach(row => {
+            const characterName = row.cells[0].textContent.toLowerCase();
+            row.style.display = characterName.includes(searchTerm) ? '' : 'none';
+        });
+    }
+
+    function renderModelsGrid(modelType) {
+        const grid = document.getElementById(`${modelType}Grid`);
+        grid.innerHTML = '';
+
+        currentPermissions[modelType].forEach(model => {
+            const item = document.createElement('div');
+            item.className = 'model-item';
+            item.innerHTML = `
+                <input type="checkbox"
+                       id="${modelType}-${model.name}"
+                       ${model.enabled ? 'checked' : ''}
+                       onchange="updateModelSelection('${modelType}', '${model.name}', this.checked)">
+                <label for="${modelType}-${model.name}" title="${model.name}">
+                    ${model.name.length > 30 ? model.name.substring(0, 27) + '...' : model.name}
+                </label>
+            `;
+            grid.appendChild(item);
+        });
+    }
+
+    function updateModelSelection(modelType, modelName, enabled) {
+        const modelIndex = currentPermissions[modelType].findIndex(m => m.name === modelName);
+        if (modelIndex !== -1) {
+            currentPermissions[modelType][modelIndex].enabled = enabled;
+        }
+        updateSelectAllStatus(modelType);
+    }
+
+    function toggleSelectAll(modelType) {
+        const checkbox = document.getElementById(`selectAll${modelType.charAt(0).toUpperCase() + modelType.slice(1)}`);
+        const enabled = checkbox.checked;
+
+        currentPermissions[modelType].forEach(model => {
+            model.enabled = enabled;
+        });
+        renderModelsGrid(modelType);
+    }
+
+    function updateSelectAllStatus(modelType) {
+        const checkbox = document.getElementById(`selectAll${modelType.charAt(0).toUpperCase() + modelType.slice(1)}`);
+        const allEnabled = currentPermissions[modelType].every(model => model.enabled);
+        checkbox.checked = allEnabled;
+    }
+
+    function filterModels(modelType) {
+        const searchBox = document.querySelector(`#${modelType}Tab .search-box`);
+        const searchTerm = searchBox.value.toLowerCase();
+
+        const grid = document.getElementById(`${modelType}Grid`);
+        const items = grid.getElementsByClassName('model-item');
+
+        Array.from(items).forEach(item => {
+            const label = item.querySelector('label');
+            const modelName = label.title.toLowerCase();
+            item.style.display = modelName.includes(searchTerm) ? '' : 'none';
+        });
     }
 
     function showDeleteConfirmation(userId) {
@@ -450,12 +812,60 @@
         modal.style.display = 'none';
     }
 
+    async function saveAllPermissions() {
+        try {
+            // Save model permissions
+            await fetch(`/admin/api/user/${currentUserId}/models`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(currentPermissions)
+            });
+
+            // Save character permissions
+            await fetch(`/admin/api/user/${currentUserId}/characters`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(currentCharacterPermissions),
+                credentials: 'include'
+            });
+
+            hideModelPermissions();
+            alert('All permissions updated successfully');
+        } catch (error) {
+            console.error('Error saving permissions:', error);
+            alert('Failed to update permissions');
+        }
+    }
+
+    // Add event listeners for tab switching
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.permission-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.permission-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                tab.classList.add('active');
+                const tabName = tab.getAttribute('data-tab');
+                document.getElementById(`${tabName}Tab`).classList.add('active');
+            });
+        });
+    });
+
     // Close modal when clicking outside
     window.onclick = function(event) {
-        const modal = document.getElementById('confirmationModal');
+        const modal = document.getElementById('modelPermissionsModal');
+        const confirmationModal = document.getElementById('confirmationModal');
         if (event.target == modal) {
-            modal.style.display = 'none';
+            hideModelPermissions();
+        }
+        if (event.target == confirmationModal) {
+            hideConfirmationModal();
         }
     }
 </script>
+
 {% endblock %}

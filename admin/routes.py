@@ -1,11 +1,17 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, session
 from datetime import datetime, timedelta
-from database.models import User, LoginAttempt, PasswordResetRequest, db
+from database.models import (
+    User, LoginAttempt, PasswordResetRequest, db, ModelPermission, 
+    DefaultModelPermission, CharacterPermission, DefaultCharacterPermission
+)
 from auth.utils import admin_required
 from sqlalchemy import func
 import os
 from config.config_utils import config
 import json
+import glob
+import yaml
+import sys
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -110,12 +116,82 @@ def approve_user(user_id):
     """Approve a pending user."""
     user = User.query.get_or_404(user_id)
     if user.status == 'pending':
-        user.status = 'approved'
-        user.is_active = True
-        db.session.commit()
-        # You could send an email notification here
-        return jsonify({'message': f'User {user.username} has been approved'})
+        try:
+            # Start transaction
+            db.session.begin_nested()
+
+            user.status = 'approved'
+            user.is_active = True
+
+            # Grant all model permissions by default
+            comfyui_dir = config.get('paths', 'comfyui_dir')
+
+            # Grant checkpoint permissions
+            checkpoint_path = os.path.join(comfyui_dir, 'checkpoints')
+            if os.path.exists(checkpoint_path):
+                for checkpoint in glob.glob(os.path.join(checkpoint_path, '*.safetensors')):
+                    permission = ModelPermission(
+                        user_id=user_id,
+                        model_type='checkpoint',
+                        model_name=os.path.basename(checkpoint),
+                        granted_by=session['user_id']
+                    )
+                    db.session.add(permission)
+
+            # Grant LoRA permissions
+            loras_path = os.path.join(comfyui_dir, 'loras')
+            if os.path.exists(loras_path):
+                for lora in glob.glob(os.path.join(loras_path, '**/*.safetensors'), recursive=True):
+                    permission = ModelPermission(
+                        user_id=user_id,
+                        model_type='lora',
+                        model_name=os.path.relpath(lora, loras_path),
+                        granted_by=session['user_id']
+                    )
+                    db.session.add(permission)
+
+            # Grant character permissions
+            try:
+                # Load characters configuration
+                config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'characters.yaml')
+                with open(config_path, 'r') as f:
+                    characters = yaml.safe_load(f)
+
+                # Get default permissions
+                default_permissions = DefaultCharacterPermission.query.all()
+                disabled_permissions = {
+                    p.character_name: {'can_generate': p.can_generate, 'can_browse': p.can_browse}
+                    for p in default_permissions
+                }
+
+                # Grant permissions for all characters
+                for char_name in characters.keys():
+                    # Use default permissions if they exist, otherwise grant full access
+                    permissions = disabled_permissions.get(char_name, {'can_generate': True, 'can_browse': True})
+                    permission = CharacterPermission(
+                        user_id=user_id,
+                        character_name=char_name,
+                        can_generate=permissions['can_generate'],
+                        can_browse=permissions['can_browse'],
+                        granted_by=session['user_id']
+                    )
+                    db.session.add(permission)
+
+            except Exception as e:
+                print(f"Error granting character permissions: {e}", file=sys.stderr)
+                raise
+
+            db.session.commit()
+            return jsonify({'message': f'User {user.username} has been approved'})
+
+        except Exception as e:
+            db.session.rollback()
+            error_msg = f"Error approving user: {str(e)}"
+            print(error_msg, file=sys.stderr)
+            return jsonify({'error': error_msg}), 500
+
     return jsonify({'error': 'Invalid user status'}), 400
+
 
 @admin_bp.route('/user/<int:user_id>/reject', methods=['POST'])
 @admin_required
@@ -163,6 +239,13 @@ def manage_user(user_id):
                 message = f"User {user.username} role changed to {user.role}"
             else:
                 return jsonify({'error': 'Cannot modify your own admin status'}), 403
+        elif action == 'toggle_delete_permission':
+            if user_id != current_user_id:  # Prevent self-modification
+                user.can_delete_files = not user.can_delete_files
+                message = f"File deletion permission {'granted to' if user.can_delete_files else 'revoked from'} {user.username}"
+                print(f"Toggled delete permission for user {user.username}. New value: {user.can_delete_files}")  # Debug line
+            else:
+                return jsonify({'error': 'Cannot modify your own permissions'}), 403
         else:
             return jsonify({'error': 'Invalid action'}), 400
 
@@ -174,6 +257,88 @@ def manage_user(user_id):
             return jsonify({'error': str(e)}), 500
 
     return jsonify({'error': 'Invalid method'}), 405
+
+
+@admin_bp.route('/api/user/<int:user_id>/characters', methods=['GET'])
+@admin_required
+def get_user_characters(user_id):
+    """Get all characters and their permission status for a user."""
+    try:
+        print(f"Loading characters for user {user_id}")
+        user = User.query.get_or_404(user_id)
+
+        # Load all available characters from config
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'characters.yaml')
+        print(f"Loading characters from: {config_path}")
+        
+        try:
+            with open(config_path, 'r') as f:
+                characters = yaml.safe_load(f)
+            print(f"Found characters: {list(characters.keys())}")
+        except Exception as e:
+            print(f"Error loading characters config: {e}")
+            return jsonify({'error': 'Failed to load characters'}), 500
+
+        # Get user's character permissions
+        user_permissions = CharacterPermission.query.filter_by(user_id=user_id).all()
+        permissions_dict = {
+            p.character_name: {'can_generate': p.can_generate, 'can_browse': p.can_browse}
+            for p in user_permissions
+        }
+        print(f"User permissions: {permissions_dict}")
+
+        # Create response with all characters and their permissions
+        character_list = []
+        for char_name in characters.keys():
+            permissions = permissions_dict.get(char_name, {'can_generate': False, 'can_browse': False})
+            character_list.append({
+                'name': char_name,
+                'can_generate': permissions['can_generate'],
+                'can_browse': permissions['can_browse']
+            })
+
+        print(f"Sending response: {character_list}")
+        return jsonify(character_list)
+
+    except Exception as e:
+        print(f"Error in get_user_characters: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/api/user/<int:user_id>/characters', methods=['POST'])
+@admin_required
+def update_user_characters(user_id):
+    """Update character permissions for a user."""
+    user = User.query.get_or_404(user_id)
+    data = request.json
+
+    try:
+        # Start transaction
+        db.session.begin_nested()
+
+        # Remove all existing character permissions
+        CharacterPermission.query.filter_by(user_id=user_id).delete()
+
+        # Add new permissions
+        admin_id = session['user_id']
+        
+        for character in data:
+            if character['can_generate'] or character['can_browse']:
+                permission = CharacterPermission(
+                    user_id=user_id,
+                    character_name=character['name'],
+                    can_generate=character['can_generate'],
+                    can_browse=character['can_browse'],
+                    granted_by=admin_id
+                )
+                db.session.add(permission)
+
+        db.session.commit()
+        return jsonify({'message': 'Character permissions updated successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 
 @admin_bp.route('/stats')
@@ -338,3 +503,226 @@ def reject_reset(request_id):
         # In a real application, you would send an email to the user here
         flash(f'Password reset rejected for user {reset_request.user.username}')
     return redirect(url_for('admin.password_resets'))
+
+
+@admin_bp.route('/api/user/<int:user_id>/models', methods=['GET'])
+@admin_required
+def get_user_models(user_id):
+    """Get all models and their permission status for a user."""
+    try:
+        print(f"Loading models for user {user_id}")
+        user = User.query.get_or_404(user_id)
+
+        # Get all available models from the filesystem
+        comfyui_dir = config.get('paths', 'comfyui_dir')
+        print(f"ComfyUI directory: {comfyui_dir}")
+        
+        checkpoints = []
+        loras = []
+
+        # Get checkpoints
+        checkpoint_path = os.path.join(comfyui_dir, 'checkpoints')
+        if os.path.exists(checkpoint_path):
+            checkpoints = [os.path.basename(f) for f in glob.glob(os.path.join(checkpoint_path, '*.safetensors'))]
+        print(f"Found checkpoints: {checkpoints}")
+
+        # Get LoRAs
+        loras_path = os.path.join(comfyui_dir, 'loras')
+        if os.path.exists(loras_path):
+            loras = [os.path.relpath(f, loras_path) for f in
+                     glob.glob(os.path.join(loras_path, '**/*.safetensors'), recursive=True)]
+        print(f"Found LoRAs: {loras}")
+
+        # Get user's permissions
+        user_permissions = user.get_available_models()
+        print(f"User permissions: {user_permissions}")
+
+        response_data = {
+            'checkpoints': [{'name': cp, 'enabled': cp in user_permissions['checkpoints']} for cp in checkpoints],
+            'loras': [{'name': lora, 'enabled': lora in user_permissions['loras']} for lora in loras]
+        }
+        print(f"Sending response: {response_data}")
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"Error in get_user_models: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/api/user/<int:user_id>/models', methods=['POST'])
+@admin_required
+def update_user_models(user_id):
+    """Update model permissions for a user."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Start transaction
+        db.session.begin_nested()
+
+        # Remove existing permissions
+        ModelPermission.query.filter_by(user_id=user_id).delete()
+
+        # Add new permissions
+        for model_type in ['checkpoints', 'loras']:
+            for model in data.get(model_type, []):
+                if model['enabled']:
+                    permission = ModelPermission(
+                        user_id=user_id,
+                        model_type=model_type[:-1],  # Remove 's' to get singular form
+                        model_name=model['name'],
+                        granted_by=session['user_id']
+                    )
+                    db.session.add(permission)
+
+        db.session.commit()
+        return jsonify({'message': 'Model permissions updated successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating model permissions: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/api/default-models', methods=['GET'])
+@admin_required
+def get_default_models():
+    """Get default model permissions for new users."""
+    default_permissions = DefaultModelPermission.query.all()
+    return jsonify({
+        'checkpoints': [{'name': p.model_name, 'enabled': p.enabled}
+                        for p in default_permissions if p.model_type == 'checkpoint'],
+        'loras': [{'name': p.model_name, 'enabled': p.enabled}
+                  for p in default_permissions if p.model_type == 'lora']
+    })
+
+
+@admin_bp.route('/api/default-models', methods=['POST'])
+@admin_required
+def update_default_models():
+    """Update default model permissions for new users."""
+    data = request.json
+
+    try:
+        # Start transaction
+        db.session.begin_nested()
+
+        # Remove all existing default permissions
+        DefaultModelPermression.query.delete()
+
+        # Add new default permissions
+        for model_type in ['checkpoints', 'loras']:
+            for model in data.get(model_type, []):
+                permission = DefaultModelPermission(
+                    model_type=model_type[:-1],  # Remove 's' to get singular form
+                    model_name=model['name'],
+                    enabled=model['enabled']
+                )
+                db.session.add(permission)
+
+        db.session.commit()
+        return jsonify({'message': 'Default permissions updated successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/api/default-characters', methods=['GET'])
+@admin_required
+def get_default_characters():
+    """Get default character permissions for new users."""
+    # Load all available characters
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'characters.yaml')
+    try:
+        with open(config_path, 'r') as f:
+            characters = yaml.safe_load(f)
+    except Exception as e:
+        print(f"Error loading characters config: {e}", file=sys.stderr)
+        return jsonify({'error': 'Failed to load characters'}), 500
+
+    # Get default permissions
+    default_permissions = DefaultCharacterPermission.query.all()
+    permissions_dict = {
+        p.character_name: {'can_generate': p.can_generate, 'can_browse': p.can_browse}
+        for p in default_permissions
+    }
+
+    # Create response with all characters and their default permissions
+    character_list = []
+    for char_name in characters.keys():
+        permissions = permissions_dict.get(char_name, {'can_generate': True, 'can_browse': True})
+        character_list.append({
+            'name': char_name,
+            'can_generate': permissions['can_generate'],
+            'can_browse': permissions['can_browse']
+        })
+
+    return jsonify(character_list)
+
+
+@admin_bp.route('/api/default-characters', methods=['POST'])
+@admin_required
+def update_default_characters():
+    """Update default character permissions for new users."""
+    data = request.json
+
+    try:
+        # Start transaction
+        db.session.begin_nested()
+
+        # Remove all existing default permissions
+        DefaultCharacterPermission.query.delete()
+
+        # Add new default permissions
+        for character in data:
+            if not character['can_generate'] or not character['can_browse']:
+                # Only store explicitly disabled permissions
+                permission = DefaultCharacterPermission(
+                    character_name=character['name'],
+                    can_generate=character['can_generate'],
+                    can_browse=character['can_browse']
+                )
+                db.session.add(permission)
+
+        db.session.commit()
+        return jsonify({'message': 'Default character permissions updated successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+def grant_default_character_permissions(user_id, admin_id):
+    """Grant default character permissions to a new user."""
+    try:
+        # Load characters configuration
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'characters.yaml')
+        with open(config_path, 'r') as f:
+            characters = yaml.safe_load(f)
+
+        # Get default permissions
+        default_permissions = DefaultCharacterPermission.query.all()
+        disabled_permissions = {
+            p.character_name: {'can_generate': p.can_generate, 'can_browse': p.can_browse}
+            for p in default_permissions
+        }
+
+        # Grant permissions for all characters except those explicitly disabled
+        for char_name in characters.keys():
+            permissions = disabled_permissions.get(char_name, {'can_generate': True, 'can_browse': True})
+            if permissions['can_generate'] or permissions['can_browse']:
+                permission = CharacterPermission(
+                    user_id=user_id,
+                    character_name=char_name,
+                    can_generate=permissions['can_generate'],
+                    can_browse=permissions['can_browse'],
+                    granted_by=admin_id
+                )
+                db.session.add(permission)
+
+        db.session.commit()
+        return True
+
+    except Exception as e:
+        print(f"Error granting default character permissions: {e}", file=sys.stderr)
+        db.session.rollback()
+        return False    
